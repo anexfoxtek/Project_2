@@ -2,7 +2,7 @@ var db = require("../models");
 
 module.exports = function(app) {
   // Get all QBs
-  app.get("/api/qb", function(req, res) {
+  app.get("/api/QB", function(req, res) {
     db.QB.findAll({}).then(function(results) {
       console.log(results);
       res.json(results);
@@ -48,6 +48,13 @@ module.exports = function(app) {
   app.get("/api/dst", function(req, res) {
     db.DST.findAll({}).then(function(results) {
       res.json(results);
+    });
+  });
+
+  // Post to roster
+  app.post("/api/roster", function(req, res) {
+    db.Roster.create(req.body).then(function(result) {
+      res.json(result);
     });
   });
 };

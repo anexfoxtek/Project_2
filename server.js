@@ -29,58 +29,85 @@ require("./routes/apiRoutes")(app);
 require("./routes/htmlRoutes")(app);
 
 // Socket.io
-var usernames = {};
+var players = {};
 
 var rooms = ["room1", "room2", "room3"];
 
 io.sockets.on("connection", function(socket) {
   console.log("a user connected");
   // when the client emits 'addteam', this listens and executes
-  socket.on("addteam", function(username) {
-    // store the username in the socket session for this client
-    socket.username = username;
+  socket.on("addteam", function(teamName) {
+    // store the team name in the socket session for this client
+    socket.teamName = teamName;
     // store the room name in the socket session for this client
     socket.room = "room1";
-    // add the client's username to the global list
-    usernames[username] = username;
+    // add the client's team name to the global players list
+    players[teamName] = teamName;
     // send client to room 1
     socket.join("room1");
+    console.log(teamName + " has joined");
     // echo to client they've connected
-    socket.emit("updatechat", "SERVER", "You have connected to Locker Room 1");
+    socket.emit(
+      "updatechat",
+      "SERVER",
+      "you have connected to the locker room"
+    );
     // echo to room 1 that a person has connected to their room
     socket.broadcast
       .to("room1")
-      .emit("updatechat", "SERVER", username + " has connected to this room");
+      .emit("updatechat", "SERVER", teamName + " has connected to this room");
     socket.emit("updaterooms", rooms, "room1");
   });
 
-  // when the client emits 'sendchat', this listens and executes
+  // when the client emits 'sendchat', this listens and executes...
   socket.on("sendchat", function(msg) {
     // we tell the client to execute 'updatechat' with 2 parameters
-    io.sockets.in(socket.room).emit("updatechat", socket.username, msg);
+    io.sockets.in(socket.room).emit("updatechat", socket.teamName, msg);
   });
 
-  // socket.on('typing', () => {
-  //   socket.broadcast.emit('typing', {
-  //     username: socket.username
-  //   });
-  // });
+  // When the client emits 'startgame', this listens and executes...
+  socket.on("startgame", function() {
+    console.log("------ GAME STARTED -----");
+    // tell client to execute 'starttimer'
+    io.emit("starttimer", "test");
+  });
 
-  // // when the client emits 'stop typing', we broadcast it to others
-  // socket.on('stop typing', () => {
-  //   socket.broadcast.emit('stop typing', {
-  //     username: socket.username
-  //   });
-  // });
+  // Timer stops -> Game Over
+  socket.on("timerstop", function() {
+    // pull data from data base
+    // app.get("api/roster", function(req, res) {
+    //   console.log(res);
+    //   res.json({key: "value"});
+        // res.json(results);
+        // console.log(results);
+        // var data = JSON.parse(results);
+      // });
+    // parse and tally data
+    // io.emit("gameover", data);
+    io.emit("gameover");
+  });
+
+  socket.on('typing', () => {
+    socket.broadcast.emit('typing', {
+      username: socket.teamName
+    });
+  });
+
+  // when the client emits 'stop typing', we broadcast it to others
+  socket.on('stop typing', () => {
+    socket.broadcast.emit('stop typing', {
+      username: socket.teamName
+    });
+  });
 
   // when the user disconnects.. perform this
   socket.on("disconnect", function() {
     console.log("user disconnected");
 
     // remove the username from global usernames list
-    delete usernames[socket.username];
+    delete players[socket.teamName];
     // update list of users in chat, client-side
-    io.sockets.emit("updateusers", usernames);
+    io.sockets.emit("updateusers", players);
     // echo globally that this client has left
     socket.broadcast.emit(
       "updatechat",

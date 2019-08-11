@@ -7,6 +7,9 @@ var $teBtn = $("#te-btn");
 var $kBtn = $("#k-btn");
 var $defBtn = $("#def-btn");
 
+var playerScoreArr = [];
+var totalScore = 0;
+
 // Get functions for getting player data and displaying to html
 var getQBs = function() {
   return $.ajax({
@@ -78,6 +81,39 @@ var getDEF = function() {
   });
 };
 
+var postRoster = function(player) {
+  return $.ajax({
+    headers: {
+      "Content-Type": "application/json"
+    },
+    type: "POST",
+    url: "api/roster",
+    data: JSON.stringify(player)
+  });
+};
+
+// var getRoster = function() {
+//   console.log("getting roster...");
+//   return $.ajax({
+//     url: "api/roster",
+//     type: "GET"
+//   }).then(function(data) {
+//     $("#end-table").html(data);
+//   });
+// };
+
+var getTotalScore = function() {
+  for (var i in playerScoreArr) {
+    totalScore += playerScoreArr[i];
+  }
+
+  console.log("Total roster score: " + totalScore);
+};
+
+var displayGameover = function() {
+  window.location.assign("./gameover.html");
+};
+
 // Event listeners for position buttons
 $qbBtn.on("click", getQBs);
 $rbBtn.on("click", getRBs);
@@ -88,7 +124,6 @@ $kBtn.on("click", getKs);
 $defBtn.on("click", getDEF);
 
 // Add players to user's team
-
 function attachBtnHandler() {
   var $addBtnList = $(".add-btn");
   console.log($addBtnList);
@@ -97,9 +132,15 @@ function attachBtnHandler() {
 
     var playerInfo = event.currentTarget.dataset;
 
-    console.log(playerInfo);
-
     console.log("add button clicked");
+
+    postRoster(playerInfo);
+
+    console.log(playerInfo.rank);
+    // Push rank to player score array
+    var rank = parseInt(playerInfo.rank);
+    playerScoreArr.push(rank);
+    console.log("Roster Scores: " + playerScoreArr);
 
     $("#roster").append(
       "<tr><td>" +
@@ -124,3 +165,86 @@ function attachBtnHandler() {
     );
   });
 }
+
+// SOCKET.IO
+$(function() {
+  var socket = io();
+
+  // on connection to server, ask for user's team name with an anonymous callback
+  socket.on("connect", function() {
+    // call the server-side function 'addteam' and send one parameter (value of prompt)
+    socket.emit("addteam", prompt("What's your team name?"));
+  });
+
+  $("#chat-form").submit(function(e) {
+    e.preventDefault(); // prevents page reloading
+
+    socket.emit("sendchat", $("#m").val());
+    $("#m").val("");
+    return false;
+  });
+
+  socket.on("updatechat", function(teamName, msg) {
+    $("#messages").append($("<li>").text(teamName + ": " + msg));
+  });
+
+
+  const addChatTyping = (data) => {
+    data.typing = true;
+    data.message = 'is typing';
+    addChatMessage(data);
+  }
+
+  socket.on('typing', (data) => {
+    addChatTyping(data);
+  });
+
+
+  // Removes the visual chat typing message
+  const removeChatTyping = (data) => {
+    getTypingMessages(data).fadeOut(function () {
+      $(this).remove();
+    });
+  }
+
+  // Whenever the server emits 'stop typing', kill the typing message
+  socket.on('stop typing', (data) => {
+    removeChatTyping(data);
+  });
+});
+
+$(function() {
+  var socket = io();
+
+  // Start game button
+  $("#start-btn").click(function() {
+    console.log("start btn clicked");
+    socket.emit("startgame");
+  });
+
+  // Countdown clock starts
+  socket.on("starttimer", function() {
+    console.log("starttimer");
+    var timerValue = 240;
+    // eslint-disable-next-line
+    var clock = $(".timer-clock").FlipClock(timerValue, {
+      countdown: true,
+      clockFace: "MinuteCounter",
+      callbacks: {
+        stop: function() {
+          socket.emit("timerstop");
+        }
+      }
+    });
+    $("#start-btn").hide();
+    $(".btn-grp-wrap").css("margin-top", "-2.5%");
+    getQBs();
+  });
+
+  socket.on("gameover", function() {
+    getTotalScore();
+    alert("Time is up!");
+    // Display gameover.html to all clients
+    displayGameover();
+  });
+});
